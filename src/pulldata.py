@@ -69,7 +69,7 @@ def pull_match_data(matchId):
 	response = requests.get(url)
 	match = response.json()
 
-	# Try again in 10 seconds if it didn't go through
+	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
 		print(response.text)
 		print("Pull match request failed with code:",response.status_code)
@@ -134,6 +134,14 @@ def pull_player_match_info(encryptedAccountId):
 	print("Getting matches for player with encrypted account id...", flush=True)
 	url = LOL_API_BASE_URL + GET_MATCHES_PATH + encryptedAccountId + "?queue=420&api_key=" + API_KEY
 	response = requests.get(url)
+
+	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	if response.status_code != 200:
+		print(response.text)
+		print("Pull player match info request failed with code:", response.status_code)
+		time.sleep(10 * RATE_LIMIT)
+		return pull_player_match_info(encryptedAccountId)
+
 	matches = response.json()["matches"]
 	print("Found",len(matches),"matches")
 	return matches
