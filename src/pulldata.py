@@ -17,6 +17,8 @@ match_col = loldb["matches"]
 # 100 requests / 2 minutes
 RIOT_API_BASE_URL = "https://americas.api.riotgames.com"
 LOL_API_BASE_URL = "https://na1.api.riotgames.com"
+# Currently rate limited to 120 seconds / 100 matches
+RATE_LIMIT = 120 / 100
 # match-v4: /lol/match/v4/matches/{matchId}		Get match by match ID
 # match-v4: /lol/match/v4/matchlists/by-account/{encryptedAccountId}
 
@@ -66,8 +68,15 @@ def pull_match_data(matchId):
 	response = requests.get(url)
 	match = response.json()
 
-	print(matchId)
-	print(match)
+	# Try again in 20 seconds if it didn't go through
+	if response.status_code != 200:
+		print(response.body())
+		print(response.status_code)
+		time.sleep(20)
+		return pull_match_data(matchId)
+
+	#print(matchId)
+	#print(match)
 
 	# Get player non specific data
 	match_data["gameId"] = matchId
@@ -86,8 +95,10 @@ def pull_match_data(matchId):
 		player["role"] = p["timeline"]["role"]
 		player["lane"] = p["timeline"]["lane"]
 		teams[player["team"]].append(player)
+		player["accountId"] = pIden["player"]["accountId"]
 		players.append(player)
 	match_data["teams"] = teams
+	match_data["players"] = players
 
 	# Get match outcome
 	outcome = match["teams"][0]["win"] == "Fail"
@@ -96,15 +107,13 @@ def pull_match_data(matchId):
 	match_data["outcome"] = outcome
 
 	# Print match data for debugging purposes
-	print_match(players, outcome)
+	#print_match(players, outcome)
 	return match_data
 
 # Pull recent ranked matched associated with a specific encryptedAccountId
 def pull_players_matches(encryptedAccountId):
-	url = LOL_API_BASE_URL + GET_MATCHES_PATH + encryptedAccountId + "?queue=420&api_key=" + API_KEY
-	response = requests.get(url)
-	matches = response.json()["matches"]
-	print("Found",len(matches),"matches")
+	matches = pull_player_match_info(encryptedAccountId)
+	time.sleep(RATE_LIMIT)
 	matches_data = []
 	for match in matches:
 		# TODO: check if match is already in the database before grabbing match data
@@ -114,8 +123,18 @@ def pull_players_matches(encryptedAccountId):
 		# TODO: save match in database
 		matches_data.append(match_data)
 		print("Added match data")
+		match_col.replace_one({"gameId":match["gameId"]},match_data,upsert=True)
 		print(match_data, flush=True)
-		time.sleep(100)
+		time.sleep(RATE_LIMIT)
+	return matches_data
+
+# Pull recent ranked matched associated with a specific encryptedAccountId
+def pull_player_match_info(encryptedAccountId):
+	print("Getting matches for player with encrypted account id...", flush=True)
+	url = LOL_API_BASE_URL + GET_MATCHES_PATH + encryptedAccountId + "?queue=420&api_key=" + API_KEY
+	response = requests.get(url)
+	matches = response.json()["matches"]
+	print("Found",len(matches),"matches")
 	return matches
 
 def pull_encrypted_account_id(summonerName, tagLine):
@@ -125,11 +144,48 @@ def pull_encrypted_account_id(summonerName, tagLine):
 	response = requests.get(url)
 	return response.json()["accountId"]
 
+def pull_many_matches(seeds):
+	n_matches_added = 0
+	while True:
+		# Get first seed in queue
+		seed = seeds.pop(0)
+
+		# Pull player match info
+		player_matches = pull_player_match_info(seed)
+		time.sleep(RATE_LIMIT)
+
+		# Pull match data
+		for match in player_matches:
+			# Check that match is not already in database
+			if match_col.count_documents({'gameId': match["gameId"]}) == 0:
+				
+				print("\nPulling new match...", flush=True)
+
+				# Pull match data and add to database it if it isn't
+				match_data = pull_match_data(match["gameId"])
+				time.sleep(RATE_LIMIT)
+
+				# Pull players from match and add to seeds list (if they're not already there)
+				print("Stripping players from match...", flush=True)
+				i = 0
+				for team in match_data["teams"]:
+					for player in team:
+						if player["accountId"] not in seeds:
+							seeds.append(player["accountId"])
+							i+=1
+				print("Added {} players to seed players queue ({} players in queue)".format(i,len(seeds)), flush=True)
+
+				# Put into database
+				match_col.insert_one(match_data)
+				print("Inserted match into database ({} matches added)".format(n_matches_added), flush=True)
+				n_matches_added+=1
+				
+
 if __name__ == "__main__":
 	# Grab 1 person's recent matches
 	seed = pull_encrypted_account_id("Nubrozaref", "NA1")
 
-	pull_players_matches(seed)
+	pull_many_matches([seed])
 
 # Important match data:
 # gameId (long)
