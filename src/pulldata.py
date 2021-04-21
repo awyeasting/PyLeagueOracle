@@ -45,6 +45,14 @@ GET_MATCHES_PATH = "/lol/match/v4/matchlists/by-account/"
 # /lol/match/v4/matches/{matchId} ->
 GET_MATCH_PATH = "/lol/match/v4/matches/"
 
+# process for getting challenger account ids:
+# /lol/league/v4/challengerleagues/by-queue/{queue} (queue = "RANKED_SOLO_5x5") -> ["entries"][i]["summonerId"]
+GET_CHALLENGER_LEAGUE_PATH = "/lol/league/v4/challengerleagues/by-queue/"
+CHALLENGER_QUEUE = "RANKED_SOLO_5x5"
+# /lol/summoner/v4/summoners/{encryptedSummonerId} -> ["accountId"]
+GET_SUMMONER_PATH = "/lol/summoner/v4/summoners/"
+
+
 # Print the match information in human readable format
 # (for debugging purposes)
 def print_match(players, outcome):
@@ -147,16 +155,28 @@ def pull_player_match_info(encryptedAccountId):
 	return matches
 
 def pull_encrypted_account_id(summonerName, tagLine):
+	print("Pulling PUUID for account seeding...", flush=True)
 	url = RIOT_API_BASE_URL + GET_PUUID_PATH + summonerName + "/" + tagLine + "?api_key=" + API_KEY
 	response = requests.get(url)
+	time.sleep(RATE_LIMIT)
+	print("Pulling encrypted account id from PUUID for account seeding...", flush=True)
 	url = LOL_API_BASE_URL + GET_ACCOUNT_PATH + response.json()["puuid"] + "?api_key=" + API_KEY
 	response = requests.get(url)
+	time.sleep(RATE_LIMIT)
 	return response.json()["accountId"]
 
-def pull_many_matches(seeds):
+def pull_many_matches(seeds=[]):
 	n_matches_added = 0
 	seeds_looked_at = 0
+	n_seeds = 1
 	while True:
+		# If there are currently no seeds then get the challenger seeds
+		if not len(seeds):
+			seeds = get_challenger_seeds(n_seeds)
+			# Increase the number of seed accounts to look at next time if the seeds run out 
+			# (likely to only happen in cases where there aren't recent enough games on the lowest ranked challenger summoners)
+			n_seeds *= 2
+
 		# Get first seed in queue
 		seed = seeds.pop(0)
 		seeds_looked_at += 1
@@ -190,13 +210,66 @@ def pull_many_matches(seeds):
 				match_col.insert_one(match_data)
 				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at), flush=True)
 				n_matches_added+=1
-				
+
+# Get list of summoner ids with associated lp for each summoner
+def get_challenger_summoners():
+	url = LOL_API_BASE_URL + GET_CHALLENGER_LEAGUE_PATH + CHALLENGER_QUEUE + "?api_key=" + API_KEY
+	response = requests.get(url)
+
+	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	if response.status_code != 200:
+		print(response.text)
+		print("Get challenger summoners request failed with code:", response.status_code, flush=True)
+		time.sleep(10 * RATE_LIMIT)
+		return get_challenger_summoners()
+
+	summonerIds = []
+	for entry in response.json()["entries"]:
+		summonerIds.append((entry["leaguePoints"], entry["summonerId"]))
+	return summonerIds
+
+def get_summoner_account_id(summonerId):
+	url = LOL_API_BASE_URL + GET_SUMMONER_PATH + summonerId + "?api_key=" + API_KEY
+	response = requests.get(url)
+
+	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	if response.status_code != 200:
+		print(response.text)
+		print("Get summoner account id failed with code:", response.status_code, flush=True)
+		time.sleep(10 * RATE_LIMIT)
+		return get_summoner_account_id(summonerId)
+
+	return response.json()["accountId"]
+
+def get_challenger_seeds(n_summoners,highest_first=False):
+	print("Getting challenger seeds...", flush=True)
+	summoners = get_challenger_summoners()
+	time.sleep(RATE_LIMIT)
+
+	# Sort it to either be descending or ascending (default)
+	summoners.sort(key=lambda x: x[0], reverse=highest_first)
+	if n_summoners == -1:
+		n_summoners = len(summoners)
+	elif n_summoners > len(summoners):
+		n_summoners = len(summoners)
+
+	# Look up the account ids of n_summoner summoner ids
+	print("Looking up {} summoner account ids...".format(n_summoners), flush=True)
+	accountIds = []
+	for i in range(n_summoners):
+		print("Looking up account id {} of {}...".format(i+1, n_summoners), flush=True)
+		accountId = get_summoner_account_id(summoners[i][1])
+		accountIds.append(accountId)
+		time.sleep(RATE_LIMIT)
+
+	return accountIds
 
 if __name__ == "__main__":
 	# Grab 1 person's recent matches
-	seed = pull_encrypted_account_id("Nubrozaref", "NA1")
+	# seed = pull_encrypted_account_id("Nubrozaref", "NA1")
 
-	pull_many_matches([seed])
+	# Default now to pulling matches from challenger instead of starting from my account
+	pull_many_matches()
 
 # Important match data:
 # gameId (long)
