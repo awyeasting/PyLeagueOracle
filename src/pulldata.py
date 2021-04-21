@@ -19,7 +19,7 @@ RIOT_API_BASE_URL = "https://americas.api.riotgames.com"
 LOL_API_BASE_URL = "https://na1.api.riotgames.com"
 # Currently rate limited to 120 seconds / 100 matches
 # Pad rate limit by 5% to try to ensure no problems with too many requests
-RATE_LIMIT = (120 / 100) * 1.05
+RATE_LIMIT = (120 / 100) * 1.01
 # match-v4: /lol/match/v4/matches/{matchId}		Get match by match ID
 # match-v4: /lol/match/v4/matchlists/by-account/{encryptedAccountId}
 
@@ -143,6 +143,11 @@ def pull_player_match_info(encryptedAccountId):
 	url = LOL_API_BASE_URL + GET_MATCHES_PATH + encryptedAccountId + "?queue=420&api_key=" + API_KEY
 	response = requests.get(url)
 
+	# If the accountId isn't found anymore (moved servers?)
+	if response.status_code == 404:
+		print("Encrypted account id not found, skipping seed")
+		return None
+
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
 		print(response.text)
@@ -185,6 +190,12 @@ def pull_many_matches(seeds=[]):
 		player_matches = pull_player_match_info(seed)
 		time.sleep(RATE_LIMIT)
 
+		# If player account not found, then skip this seed
+		if player_matches == None:
+			print("Skipping seed with no matches...")
+			seeds_looked_at -= 1
+			continue
+
 		# Pull match data
 		for match in player_matches:
 			# Check that match is not already in database
@@ -201,7 +212,7 @@ def pull_many_matches(seeds=[]):
 				i = 0
 				for team in match_data["teams"]:
 					for player in team:
-						if player["accountId"] not in seeds:
+						if (player["accountId"] not in seeds) and (player["accountId"] != seed):
 							seeds.append(player["accountId"])
 							i+=1
 				print("Added {} players to seed players queue ({} players in queue)".format(i,len(seeds)), flush=True)
