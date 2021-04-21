@@ -66,8 +66,11 @@ def pull_match_data(matchId):
 	response = requests.get(url)
 	match = response.json()
 
+	print(matchId)
+	print(match)
+
 	# Get player non specific data
-	match_data["gameId"] = match["gameId"]
+	match_data["gameId"] = matchId
 	match_data["gameCreation"] = match["gameCreation"]
 	match_data["gameDuration"] = match["gameDuration"]
 

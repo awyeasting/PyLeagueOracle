@@ -12,7 +12,8 @@ def getChampionMap():
 
 def getInternalChampMap(champion_map):
 	m = {}
-	champs = champion_map.items().sort(key=(lambda x: x[0]))
+	champs = list(champion_map.items())
+	champs.sort(key=(lambda x: x[0]))
 	for i in range(len(champs)):
 		m[champs[i][0]] = i
 	return m
@@ -21,3 +22,7 @@ def getInternalChampMap(champion_map):
 champion_map = getChampionMap()
 # Map league champion id to internal champion id (0 - N champs)
 internal_champion_map = getInternalChampMap(champion_map)
+
+if __name__ == "__main__":
+	print(champion_map)
+	print(internal_champion_map)
