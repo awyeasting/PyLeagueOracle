@@ -18,7 +18,8 @@ match_col = loldb["matches"]
 RIOT_API_BASE_URL = "https://americas.api.riotgames.com"
 LOL_API_BASE_URL = "https://na1.api.riotgames.com"
 # Currently rate limited to 120 seconds / 100 matches
-RATE_LIMIT = 120 / 100
+# Pad rate limit by 5% to try to ensure no problems with too many requests
+RATE_LIMIT = (120 / 100) * 1.05
 # match-v4: /lol/match/v4/matches/{matchId}		Get match by match ID
 # match-v4: /lol/match/v4/matchlists/by-account/{encryptedAccountId}
 
@@ -68,11 +69,11 @@ def pull_match_data(matchId):
 	response = requests.get(url)
 	match = response.json()
 
-	# Try again in 20 seconds if it didn't go through
+	# Try again in 10 seconds if it didn't go through
 	if response.status_code != 200:
-		print(response.body())
-		print(response.status_code)
-		time.sleep(20)
+		print(response.text)
+		print("Pull match request failed with code:",response.status_code)
+		time.sleep(10 * RATE_LIMIT)
 		return pull_match_data(matchId)
 
 	#print(matchId)
@@ -146,9 +147,11 @@ def pull_encrypted_account_id(summonerName, tagLine):
 
 def pull_many_matches(seeds):
 	n_matches_added = 0
+	seeds_looked_at = 0
 	while True:
 		# Get first seed in queue
 		seed = seeds.pop(0)
+		seeds_looked_at += 1
 
 		# Pull player match info
 		player_matches = pull_player_match_info(seed)
@@ -177,7 +180,7 @@ def pull_many_matches(seeds):
 
 				# Put into database
 				match_col.insert_one(match_data)
-				print("Inserted match into database ({} matches added)".format(n_matches_added), flush=True)
+				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at), flush=True)
 				n_matches_added+=1
 				
 
