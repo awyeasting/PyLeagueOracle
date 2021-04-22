@@ -77,6 +77,11 @@ def pull_match_data(matchId):
 	response = requests.get(url)
 	match = response.json()
 
+	# If the matchId isn't found anymore (too old now?)
+	if response.status_code == 404:
+		print("Match id not found, skipping seed")
+		return None
+
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
 		print(response.text)
@@ -174,6 +179,7 @@ def pull_many_matches(seeds=[]):
 	n_matches_added = 0
 	seeds_looked_at = 0
 	n_seeds = 1
+	start_time = time.time()
 	while True:
 		# If there are currently no seeds then get the challenger seeds
 		if not len(seeds):
@@ -204,8 +210,16 @@ def pull_many_matches(seeds=[]):
 				print("\nPulling new match...", flush=True)
 
 				# Pull match data and add to database it if it isn't
-				match_data = pull_match_data(match["gameId"])
+				try:
+					match_data = pull_match_data(match["gameId"])
+				except KeyError:
+					print("Unknown error occurred while trying to pull match data, skipping...")
+					continue
 				time.sleep(RATE_LIMIT)
+
+				# If no match found for the id then check next match
+				if match_data == None:
+					continue
 
 				# Pull players from match and add to seeds list (if they're not already there)
 				print("Stripping players from match...", flush=True)
@@ -219,8 +233,11 @@ def pull_many_matches(seeds=[]):
 
 				# Put into database
 				match_col.insert_one(match_data)
-				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at), flush=True)
 				n_matches_added+=1
+				cur_time = time.time()
+				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at))
+				matches_per_second = n_matches_added / (cur_time - start_time)
+				print("{:.2f} matches per second ({:.2f} matches per minutes)".format(matches_per_second, matches_per_second * 60), flush=True)
 
 # Get list of summoner ids with associated lp for each summoner
 def get_challenger_summoners():
