@@ -1,9 +1,16 @@
 import requests
 
-CHAMPION_INFO_PATH = "http://ddragon.leagueoflegends.com/cdn/11.7.1/data/en_US/champion.json"
+VERSION_INFO_PATH = "http://ddragon.leagueoflegends.com/api/versions.json"
+CHAMPION_INFO_PATH = "http://ddragon.leagueoflegends.com/cdn/{}/data/en_US/champion.json"
 
-def getChampionMap():
-	response = requests.get(CHAMPION_INFO_PATH)
+def getRecentGameVersion():
+	response = requests.get(VERSION_INFO_PATH)
+	js = response.json()
+	print("Version:",js[0])
+	return js[0]
+
+def getChampionMap(version):
+	response = requests.get(CHAMPION_INFO_PATH.format(version))
 	js = response.json()["data"]
 	ch_map = {}
 	for champion in js.items():
@@ -16,12 +23,13 @@ def getInternalChampMap(champion_map):
 	champs.sort(key=(lambda x: x[0]))
 	for i in range(len(champs)):
 		m[champs[i][0]] = i
-	return m
+	print("N champs:", len(champs))
+	return m, len(champs)
 
 # Map league champion id to champion name
-champion_map = getChampionMap()
+champion_map = getChampionMap(getRecentGameVersion())
 # Map league champion id to internal champion id (0 - N champs)
-internal_champion_map = getInternalChampMap(champion_map)
+internal_champion_map, n_champs = getInternalChampMap(champion_map)
 
 if __name__ == "__main__":
 	print(champion_map)
