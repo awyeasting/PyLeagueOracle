@@ -3,7 +3,7 @@ import pymongo
 import champion_map
 
 from HIDDEN_CONFIG import API_KEY, MONGODB_CONN_STR
-from config import LOL_DB_NAME, MATCH_COL_NAME
+from config import LOL_DB_NAME, MATCH_COL_NAME, SEED_COL_NAME, USE_SEEDS_COL
 from matches import pull_many_matches
 
 # Print the match information in human readable format
@@ -27,6 +27,8 @@ if __name__ == "__main__":
 	dbclient = pymongo.MongoClient(MONGODB_CONN_STR)
 	loldb = dbclient[LOL_DB_NAME]
 	match_col = loldb[MATCH_COL_NAME]
-
-	# Default to pulling matches from challenger instead of starting from a seed account
-	pull_many_matches(matchCol=match_col)
+	seed_col = None
+	if USE_SEEDS_COL:
+		seed_col = loldb[SEED_COL_NAME]
+	
+	pull_many_matches(matchCol=match_col, seedCol=seed_col)

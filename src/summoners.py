@@ -101,7 +101,10 @@ def get_challenger_seeds(n_summoners,highest_first = False, offset = 0):
 	for i in range(offset, n_summoners):
 		print("Looking up account id {} of {}...".format(i+1, n_summoners), flush=True)
 		accountId = get_summoner_account_id(summoners[i][1])
-		accounts.append((accountId, summoners[i][1]))
+		account = {}
+		account["accountId"] = accountId
+		account["summonerId"] = summoners[i][1]
+		accounts.append(account)
 		time.sleep(RATE_LIMIT)
 
 	return accounts

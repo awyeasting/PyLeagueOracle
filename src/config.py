@@ -18,13 +18,15 @@ TIER_MAPPING = {
 MAX_MATCH_AGE_DAYS = 30
 # Whether or not to attach match seed's rank to game
 PULL_SUMMONER_RANK = True
-
+# Whether to use session based seeding or persistent seeding
+USE_SEEDS_COL = True
 # --------------------------------------
 #            DATABASE CONFIG
 # --------------------------------------
 
 LOL_DB_NAME = "leagueoflegends"
 MATCH_COL_NAME = "matches-v2"
+SEED_COL_NAME = "match-seeds"
 
 # --------------------------------------
 #              API CONFIG
