@@ -170,6 +170,29 @@ def get_confidence_accuracies(model, X, y, confidenceLevels=[]):
 		accuracies.append(correct / len(confident_yhats))
 	return accuracies
 
+def predict_game(model, document, display=False):
+	# Add outcome to game if not there just to make sure conv_document_to_examples doesn't freak out
+	if not document.get("outcome"):
+		document["outcome"] = False
+
+	example = conv_document_to_examples(document)
+	example_x = example[:-1]
+	example_xs = np.array([example_x, dup_swap_x(example_x)])
+	example_yhats = model.predict(example_xs)
+
+	blueChance = example_yhats[1][0]
+	redChance = example_yhats[0][0]
+	avgBlueChance = (blueChance + (1-redChance))/2
+
+	if display:
+		print("{:.2f}%\tPredicted chance blue wins".format(100*blueChance))
+		print("{:.2f}%\tPredicted chance red wins".format(100*redChance))
+		print("--------------------------------------------")
+		print("{:.2f}%\tAveraged predicted chance blue wins".format(100*avgBlueChance))
+		print("{:.2f}%\tAveraged predicted chance red wins".format(100*(1 - avgBlueChance)), flush=True)
+
+	return blueChance, redChance, avgBlueChance
+
 if __name__ == '__main__':
 
 	model = create_training_model()
@@ -200,54 +223,46 @@ if __name__ == '__main__':
 	exampleGame = {
 		"players": [
 			{
-				"champion": champion_name_map["Urgot"], 
+				"champion": champion_name_map["Mordekaiser"], 
 				"team": 0
 			},
 			{
-				"champion": champion_name_map["Rammus"], 
+				"champion": champion_name_map["Khazix"], 
 				"team": 0
 			},
 			{
-				"champion": champion_name_map["Zed"], 
+				"champion": champion_name_map["Yone"], 
 				"team": 0
-			},
-			{
-				"champion": champion_name_map["Caitlyn"], 
-				"team": 0
-			},
-			{
-				"champion": champion_name_map["Nami"], 
-				"team": 0
-			},
-			{
-				"champion": champion_name_map["Nasus"], 
-				"team": 1
-			},
-			{
-				"champion": champion_name_map["JarvanIV"], 
-				"team": 1
-			},
-			{
-				"champion": champion_name_map["Katarina"], 
-				"team": 1
 			},
 			{
 				"champion": champion_name_map["Jinx"], 
+				"team": 0
+			},
+			{
+				"champion": champion_name_map["Morgana"], 
+				"team": 0
+			},
+			{
+				"champion": champion_name_map["Ornn"], 
 				"team": 1
 			},
 			{
-				"champion": champion_name_map["Janna"], 
+				"champion": champion_name_map["Zac"], 
+				"team": 1
+			},
+			{
+				"champion": champion_name_map["Malzahar"], 
+				"team": 1
+			},
+			{
+				"champion": champion_name_map["Varus"], 
+				"team": 1
+			},
+			{
+				"champion": champion_name_map["Nautilus"], 
 				"team": 1
 			},
 		],
 		"outcome": False
 	}
-	example = conv_document_to_examples(exampleGame)
-	example_x = example[:-1]
-	example_y = example[-1]
-	example_xs = np.array([example_x, dup_swap_x(example_x)])
-	example_ys = np.array([example_y, float(not example_y)])
-	example_yhats = model.predict(example_xs)
-	print("Predicted chance blue wins: {}%".format(example_yhats[1]))
-	print("Predicted chance red wins: {}%".format(example_yhats[0]))
-	print("Averaged predicted chance blue wins: {}%".format((example_yhats[1] + (1-example_yhats[0]))/2))
+	blueChance, redChance, avgBlueChance = predict_game(model, exampleGame, display=True)
