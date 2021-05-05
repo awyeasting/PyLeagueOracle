@@ -70,7 +70,6 @@ def get_match_data(matchId, lrt=0):
 # Do a breadth first graph traversal of league of legends matches to search for unseen
 # match data to save
 def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
-	# TODO: smarter rate limit timing
 	if matchCol == None:
 		print("Must initialize mongodb match collection before pulling many matches")
 		return
