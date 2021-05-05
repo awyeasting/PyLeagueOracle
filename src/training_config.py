@@ -5,3 +5,7 @@ BATCH_SIZE = -1
 n_matches = -1
 TEST_PORTION = 0.2
 DO_MATCH_DUP = True
+DO_TRAIN = False
+DO_LOAD = False or DO_TRAIN
+CHECKPOINT_PATH = "training_1/cp.ckpt"
+SAVE_PATH = "./checkpoints/most_recent"
