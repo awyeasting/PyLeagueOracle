@@ -5,27 +5,34 @@ from HIDDEN_CONFIG import API_KEY
 from config import LOL_API_BASE_URL, RATE_LIMIT, MAX_MATCH_AGE_DAYS
 from summoners import get_challenger_seeds, get_summoner_rank
 from accounts import get_player_match_info
+from util import waitForRequestTime
 
 # /lol/match/v4/matches/{matchId} -> match
 GET_MATCH_PATH = "/lol/match/v4/matches/"
 
 # Pull the relevant data from a single match for storage
-def get_match_data(matchId):
+def get_match_data(matchId, lrt=0):
 	match_data = {}
 	url = LOL_API_BASE_URL + GET_MATCH_PATH + str(matchId) + "?api_key=" + API_KEY
+	waitForRequestTime(lrt)
+	lrt = time.time()
 	response = requests.get(url)
 	match = response.json()
 
 	# If the matchId isn't found anymore (too old now?)
 	if response.status_code == 404:
 		print("Match id not found, skipping seed")
-		return None
+		return None, lrt
 
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
+		rateMod = 2
+		# Wait longer if too many requests
+		if response.status_code == 429:
+			rateMod = 10
 		print(response.text)
 		print("Pull match request failed with code:",response.status_code)
-		time.sleep(10 * RATE_LIMIT)
+		time.sleep(rateMod * RATE_LIMIT)
 		return get_match_data(matchId)
 
 	# Get player non specific data
@@ -58,7 +65,7 @@ def get_match_data(matchId):
 
 	# Print match data for debugging purposes (must import from pulldata.py)
 	#print_match(players, outcome)
-	return match_data
+	return match_data, lrt
 
 # Do a breadth first graph traversal of league of legends matches to search for unseen
 # match data to save
@@ -77,12 +84,14 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 	last_n_seeds = 0
 	n_seeds = 1
 	start_time = time.time()
+	last_request_time = 0
 	while True:
 		# If there are currently no seeds then get the challenger seeds
 		if not len(seeds):
 			# Offset for skipping past potentially recently seen seeds
 			# (function guarantees that it will be able to return seeds if offset gets too high)
-			seeds = get_challenger_seeds(n_seeds, offset = last_n_seeds)
+			
+			seeds, last_request_time = get_challenger_seeds(n_seeds, offset = last_n_seeds, lrt = last_request_time)
 
 			# If using persistent seeds then save the seeds
 			if seedCol:
@@ -100,9 +109,8 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 		seeds_looked_at += 1
 
 		# Pull player match info
-		player_matches = get_player_match_info(seed["accountId"])
+		player_matches, last_request_time = get_player_match_info(seed["accountId"], lrt = last_request_time)
 		oldestTimeStamp = 1000*(time.time() - (MAX_MATCH_AGE_DAYS * 24 * 60 * 60))
-		time.sleep(RATE_LIMIT)
 
 		# If player account not found, then skip this seed
 		if player_matches == None:
@@ -126,11 +134,10 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 				# Pull match data and add to database it if it isn't
 				try:
-					match_data = get_match_data(match["gameId"])
+					match_data, last_request_time = get_match_data(match["gameId"], lrt = last_request_time)
 				except KeyError:
 					print("Unknown error occurred while trying to pull match data, skipping...")
 					continue
-				time.sleep(RATE_LIMIT)
 
 				# If no match found for the id then check next match
 				if match_data == None:
@@ -153,8 +160,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 				# Attach seed's rank to match
 				if seed_rank == None:
-					seed_rank = get_summoner_rank(seed["summonerId"])
-					time.sleep(RATE_LIMIT)
+					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"])
 				match_data["seed_rank"] = seed_rank
 
 				# Put match into database
