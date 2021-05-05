@@ -84,6 +84,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 	n_seeds = 1
 	start_time = time.time()
 	last_request_time = 0
+	requests = []
 	while True:
 		# If there are currently no seeds then get the challenger seeds
 		if not len(seeds):
@@ -109,6 +110,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 		# Pull player match info
 		player_matches, last_request_time = get_player_match_info(seed["accountId"], lrt = last_request_time)
+		requests.append(last_request_time)
 		oldestTimeStamp = 1000*(time.time() - (MAX_MATCH_AGE_DAYS * 24 * 60 * 60))
 
 		# If player account not found, then skip this seed
@@ -134,6 +136,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 				# Pull match data and add to database it if it isn't
 				try:
 					match_data, last_request_time = get_match_data(match["gameId"], lrt = last_request_time)
+					requests.append(last_request_time)
 				except KeyError:
 					print("Unknown error occurred while trying to pull match data, skipping...")
 					continue
@@ -159,7 +162,8 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 				# Attach seed's rank to match
 				if seed_rank == None:
-					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"])
+					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"], lrt=last_request_time)
+					requests.append(last_request_time)
 				match_data["seed_rank"] = seed_rank
 
 				# Put match into database
@@ -169,3 +173,9 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at))
 				matches_per_second = n_matches_added / (cur_time - start_time)
 				print("{:.2f} matches per second ({:.2f} matches per minutes)".format(matches_per_second, matches_per_second * 60), flush=True)
+				minuteAgoTime = cur_time - 120
+				while True:
+					if minuteAgoTime < requests[0]:
+						break
+					requests = requests[1:]
+				print("{} requests per minute".format(len(requests)/2))
