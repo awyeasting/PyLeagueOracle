@@ -6,6 +6,7 @@ import training
 import training_config
 
 from urllib3.exceptions import InsecureRequestWarning
+from tensorflow import keras
 
 # Suppress only the single warning from urllib3 needed.
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -66,8 +67,7 @@ def waitForChampSelectToEnd(lfc):
 	return response
 
 def readUntilFinalThenPredict(lfc):
-	model = training.create_training_model()
-	model.load_weights(training_config.SAVE_PATH)
+	model = keras.models.load_model(training_config.BEST_SAVE_PATH)
 
 	justGotPrediction = False
 	while True:

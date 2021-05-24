@@ -2,6 +2,7 @@ import requests
 import time
 import os
 import random
+import math
 
 import numpy as np
 import pymongo
@@ -94,7 +95,7 @@ def boost_comp_training_data(X_train, y_train):
 		X = X_train[i]
 		y = y_train[i]
 		newX_train.append(X)
-		newX_train.append(dup_swap_x(X))
+		newX_train.append(dup_swap_dualx(X))
 		newy_train.append(y)
 		newy_train.append(float(not bool(y)))
 	newX_train = np.array(newX_train)
@@ -125,6 +126,9 @@ def get_comp_data(comp_examples):
 	X_train, X_test, y_train, y_test = train_test_split(X, y, 
 		test_size=training_config.COMP_TEST_PORTION, 
 		random_state=training_config.COMP_SPLIT_SEED)
+
+	if training_config.DO_MATCH_DUP:
+		X_train, y_train = boost_comp_training_data(X_train, y_train)
 
 	return X_train, X_test, y_train, y_test
 
@@ -219,9 +223,15 @@ def create_simple_comp_training_model():
 
 	# Build fully connected feedforward model
 	hnos = [None] * len(training_config.COMP_HIDDEN_NODES)
-	hnos[0] = keras.layers.Dense(training_config.COMP_HIDDEN_NODES[0], activation='relu', kernel_initializer='he_normal')(compInput)
+	hnos[0] = keras.layers.Dense(training_config.COMP_HIDDEN_NODES[0], 
+		activation='relu', 
+		kernel_initializer='he_normal', 
+		kernel_regularizer=keras.regularizers.l2(l=training_config.COMP_REG_PARAM))(compInput)
 	for i in range(1,len(hnos)):
-		hnos[i] = keras.layers.Dense(training_config.DUAL_HIDDEN_NODES[i], activation='relu', kernel_initializer='he_normal')(hnos[i-1])
+		hnos[i] = keras.layers.Dense(training_config.COMP_HIDDEN_NODES[i], 
+			activation='relu', 
+			kernel_initializer='he_normal',
+			kernel_regularizer=keras.regularizers.l2(l=training_config.COMP_REG_PARAM))(hnos[i-1])
 	outputs = keras.layers.Dense(1, activation='sigmoid')(hnos[-1])
 
 	model = keras.Model(inputs=inputs, outputs=outputs, name="CompModel")
@@ -333,20 +343,39 @@ def get_confidence_accuracies(model, X, y, confidenceLevels=[]):
 	# Sort model predictions by most confident
 	yhats = model.predict(X)
 	yhats_confidences = []
+	maxc = 0
+	minc = 0.25
+	avgc = 0
 	for i, yhat in enumerate(yhats):
+		if ((yhat-0.5)**2 > maxc):
+			maxc = (yhat-0.5)**2
+		if ((yhat-0.5)**2 < minc):
+			minc = (yhat-0.5)**2
+		avgc += math.sqrt((yhat-0.5)**2)
 		yhats_confidences.append(((yhat-0.5)**2, yhat, y[i]))
 	yhats_confidences.sort(key=lambda x:x[0],reverse=True)
+	avgc /= len(yhats)
+	print("Max confidence: {:.2f}%".format(100*(0.5+math.sqrt(maxc))))
+	print("Min confidence: {:.2f}%".format(100*(0.5+math.sqrt(minc))))
+	print("Avg confidence: {:.2f}%".format(100*(0.5+avgc)))
 
 	# Calculate the accuracy at each confidence level
 	accuracies = []
+	max_confidences = [0] * len(confidenceLevels)
+	j = 0
 	for confidenceLevel in confidenceLevels:
 		correct = 0
 		confident_yhats = yhats_confidences[:int(len(yhats) * confidenceLevel)]
 		for i, yhat_confidence in enumerate(confident_yhats):
+			if yhat_confidence[0] > max_confidences[j]:
+				max_confidences[j] = yhat_confidence[0] 
 			if int(np.round(yhat_confidence[1])) == int(yhat_confidence[2]):
 				correct += 1
 		accuracies.append(correct / len(confident_yhats))
-	return accuracies
+		j+=1
+	for i in range(len(max_confidences)):
+		max_confidences[i] = math.sqrt(max_confidences[i]) + 0.5
+	return accuracies, max_confidences
 
 # Returns the model's accuracy with least confident predictions using multiple confidence levels
 def get_unconfidence_accuracies(model, X, y, confidenceLevels=[]):

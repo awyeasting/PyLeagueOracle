@@ -1,4 +1,8 @@
 import functools
+import sys
+
+from tensorflow import keras
+import tensorflowjs as tfjs
 
 from champion_map import internal_champion_map, n_champs, champion_name_map
 
@@ -109,7 +113,8 @@ class Trainer:
 		if self.stats_model:
 			self.stats_model.summary()
 		for model in self.predictModels:
-			model.summary()
+			if model:
+				model.summary()
 
 		# Print model effectiveness if there's data to test that on
 		if training_config.DO_LOAD_DATA:
@@ -118,12 +123,13 @@ class Trainer:
 					print("\nConfidence accuracies for {}".format(model.name))
 					# Print most confident accuracies
 					confidenceLevels = [1, 1/10, 1/100]
-					conf_accs = get_confidence_accuracies(model, self.compX_test, self.compy_test, confidenceLevels=confidenceLevels)
+					conf_accs, max_conf = get_confidence_accuracies(model, self.compX_test, self.compy_test, confidenceLevels=confidenceLevels)
 					for i in range(len(confidenceLevels)):
 						if confidenceLevels[i] == 1:
 							print("Average predictions accuracy:\t\t\t{:.2f}%".format(100*conf_accs[i]) )
 						else:
 							print("{:.2f}% most confident predictions accuracy:\t{:.2f}%".format(confidenceLevels[i]* 100, 100*conf_accs[i]) )
+						print("Max confidence at this level:\t\t\t\t{:.2f}%".format(100*max_conf[i]))
 					# Print least confident accuracies
 					uconfidenceLevels = [1/10, 1/100]
 					uconf_accs = get_unconfidence_accuracies(model, self.compX_test, self.compy_test, confidenceLevels=uconfidenceLevels)
@@ -141,6 +147,29 @@ class Trainer:
 						print("\n{} prediction:".format(model.name))
 						blueChance, redChance, avgBlueChance = predict_game(model, exampleGame, display=True)
 
+	def save_best_model(self):
+		if training_config.DO_LOAD_DATA:
+			print("\nLoading past best model (if exists)...")
+			try:
+				best_model = keras.models.load_model(training_config.BEST_SAVE_PATH)
+				best_loss, _ = model.evaluate(self.compX_test, self.compy_test, len(self.compy_test))
+			except:
+				best_model = None
+				best_loss = sys.float_info.max
+
+			for model in self.predictModels:
+				if model:
+					print("Testing new model...")
+					loss, acc = model.evaluate(self.compX_test, self.compy_test, batch_size=len(self.compy_test))
+					if loss < best_loss:
+						best_model = model
+						best_loss = loss
+						print("New best model found!")
+
+			best_model.save(training_config.BEST_SAVE_PATH)
+			tfjs.converters.save_keras_model(best_model, training_config.BEST_SAVE_PATH + '/tfjs')
+			print("\nBest model loss: ", best_loss)
+
 if __name__ == '__main__':
 	trainer = Trainer()
 
@@ -153,3 +182,5 @@ if __name__ == '__main__':
 	trainer.print_model_info()
 
 	trainer.predict_manual_examples()
+
+	trainer.save_best_model()

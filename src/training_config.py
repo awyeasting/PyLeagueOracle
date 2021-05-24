@@ -1,9 +1,10 @@
 COMP_HIDDEN_NODES = [100]
-COMP_LEARNING_RATE = 0.00005
-COMP_NUM_EPOCHS = 700
+COMP_LEARNING_RATE = 0.0005
+COMP_NUM_EPOCHS = 1000
 COMP_BATCH_SIZE = -1
 COMP_TEST_PORTION = 0.2
 COMP_SPLIT_SEED = 1338
+COMP_REG_PARAM = 0.01
 
 COMP_PORTION = 0.8 # How much of the training data to give to the composition model vs stats model
 PORTION_SEED = 1337
@@ -22,7 +23,7 @@ DUAL_BATCH_SIZE = -1
 
 N_MATCHES = -1
 
-DO_MATCH_DUP = True
+DO_MATCH_DUP = False
 
 DO_COMP_TRAIN = False
 DO_COMP_LOAD = True
@@ -31,7 +32,7 @@ DO_DUAL_TRAIN = False
 DO_DUAL_LOAD = True
 
 DO_STATS_TRAIN = False
-DO_STATS_LOAD = True or DO_DUAL_LOAD or DO_DUAL_TRAIN
+DO_STATS_LOAD = False or DO_DUAL_LOAD or DO_DUAL_TRAIN
 
 DO_LOAD_DATA = True or DO_COMP_TRAIN or DO_STATS_TRAIN or DO_DUAL_TRAIN
 
@@ -39,6 +40,8 @@ CHECKPOINT_PATH = "training_1/cp.ckpt"
 COMP_SAVE_PATH = "./checkpoints/comp_most_recent"
 STATS_SAVE_PATH = "./checkpoints/stats_most_recent"
 DUAL_SAVE_PATH = "./checkpoints/dual_most_recent"
+
+BEST_SAVE_PATH = "models/best_model"
 
 DO_PREDICT_MANUAL_EXAMPLES = True
 
