@@ -15,13 +15,15 @@ TIER_MAPPING = {
 }
 
 # How old of matches should be considered
-MAX_MATCH_AGE_DAYS = 30
+MAX_MATCH_AGE_DAYS = 7
 # Whether or not to attach match seed's rank to game
 PULL_SUMMONER_RANK = True
 # Whether to use session based seeding or persistent seeding
 USE_SEEDS_COL = True
 # Max tier match to save (to prevent decreasing quality of match-data and too many low-elo seeds)
 MAX_MATCH_TIER = 4
+# Match cull wait
+MATCH_CULL_WAIT = 24 * 60 * 60 # Currently culls matches once a day
 
 # --------------------------------------
 #            DATABASE CONFIG
