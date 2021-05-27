@@ -1,3 +1,5 @@
+import time
+
 import pymongo
 
 import champion_map
@@ -30,5 +32,12 @@ if __name__ == "__main__":
 	seed_col = None
 	if USE_SEEDS_COL:
 		seed_col = loldb[SEED_COL_NAME]
-	
-	pull_many_matches(matchCol=match_col, seedCol=seed_col)
+
+	while True:
+		print("Pulling matches...\n",flush=True)
+		try:
+			pull_many_matches(matchCol=match_col, seedCol=seed_col)
+		except:
+			print("Pull many matches failed. Waiting 10 seconds before retry...")
+			# Wait 10 seconds before restarting match pulling if there was an unexpected error
+			time.sleep(10)

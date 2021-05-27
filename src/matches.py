@@ -74,9 +74,11 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 		print("Must initialize mongodb match collection before pulling many matches")
 		return
 	if seedCol:
+		print("Loading seeds from database...", flush=True)
 		cursor = seedCol.find({}).sort("_id",1)
 		for seed in cursor:
 			seeds.append(seed)
+		print("Seeds added from database", flush=True)
 
 	n_matches_added = 0
 	seeds_looked_at = 0
@@ -90,7 +92,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 		if not len(seeds):
 			# Offset for skipping past potentially recently seen seeds
 			# (function guarantees that it will be able to return seeds if offset gets too high)
-			
+
 			seeds, last_request_time = get_challenger_seeds(n_seeds, offset = last_n_seeds, lrt = last_request_time)
 
 			# If using persistent seeds then save the seeds
@@ -130,7 +132,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 			# Check that match is not already in database
 			if matchCol.count_documents({'gameId': match["gameId"]}) == 0:
-				
+
 				print("\nPulling new match...", flush=True)
 
 				# Pull match data and add to database it if it isn't

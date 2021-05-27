@@ -71,8 +71,10 @@ def get_summoner_account_id(summonerId):
 
 # Get list of summoner ids with associated lp for each summoner
 def get_challenger_summoners():
+	print("Getting challenger summoners...", flush=True)
 	url = LOL_API_BASE_URL + GET_CHALLENGER_LEAGUE_PATH + CHALLENGER_QUEUE + "?api_key=" + API_KEY
 	response = requests.get(url)
+	print("Challenger summoners retrieved", flush=True)
 
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
