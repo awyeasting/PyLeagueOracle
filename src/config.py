@@ -20,6 +20,9 @@ MAX_MATCH_AGE_DAYS = 30
 PULL_SUMMONER_RANK = True
 # Whether to use session based seeding or persistent seeding
 USE_SEEDS_COL = True
+# Max tier match to save (to prevent decreasing quality of match-data and too many low-elo seeds)
+MAX_MATCH_TIER = 4
+
 # --------------------------------------
 #            DATABASE CONFIG
 # --------------------------------------

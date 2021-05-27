@@ -2,7 +2,7 @@ import requests
 import time
 
 from HIDDEN_CONFIG import API_KEY
-from config import LOL_API_BASE_URL, RATE_LIMIT, MAX_MATCH_AGE_DAYS
+from config import LOL_API_BASE_URL, RATE_LIMIT, MAX_MATCH_AGE_DAYS, MAX_MATCH_TIER
 from summoners import get_challenger_seeds, get_summoner_rank
 from accounts import get_player_match_info
 from util import waitForRequestTime
@@ -147,6 +147,15 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 				if match_data == None:
 					continue
 
+				# Attach seed's rank to match
+				if seed_rank == None:
+					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"], lrt=last_request_time)
+					requests.append(last_request_time)
+					if seed_rank["rankMapping"] > MAX_MATCH_TIER:
+						print("Discarding lowelo seed...")
+						break
+				match_data["seed_rank"] = seed_rank
+
 				# Pull players from match and add to seeds list (if they're not already there)
 				print("Stripping players from match...", flush=True)	
 				i = 0
@@ -161,12 +170,6 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 							seedCol.insert_one(newSeed)
 						i+=1
 				print("Added {} players to seed players queue ({} players in queue)".format(i,len(seeds)), flush=True)
-
-				# Attach seed's rank to match
-				if seed_rank == None:
-					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"], lrt=last_request_time)
-					requests.append(last_request_time)
-				match_data["seed_rank"] = seed_rank
 
 				# Put match into database
 				matchCol.insert_one(match_data)
