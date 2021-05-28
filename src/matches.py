@@ -151,6 +151,9 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 				if seed_rank == None:
 					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"], lrt=last_request_time)
 					requests.append(last_request_time)
+					if seed_rank.get("rankMapping") == None:
+						print("Discarding unknown rank seed...")
+						break
 					if seed_rank["rankMapping"] > MAX_MATCH_TIER:
 						print("Discarding lowelo seed...")
 						break

@@ -26,7 +26,7 @@ def get_summoner_rank(summonerId, lrt = 0):
 	# If the summonerId isn't found anymore (moved servers?)
 	if response.status_code == 404:
 		print("Could not get rank from summonerId")
-		return None, lrt
+		return {}, lrt
 
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
