@@ -313,7 +313,7 @@ def create_dual_model(stats_model):
 	return model
 
 # Train the model on training data using test data as validation
-def train_model(model, X_train, X_test, y_train, y_test, batch_size, num_epochs, save_path, has_acc = False):
+def train_model(model, X_train, X_test, y_train, y_test, batch_size, num_epochs, save_path, has_acc = False, cb_list=[]):
 	if batch_size < 0:
 		batch_size = len(y_train)
 
@@ -323,6 +323,7 @@ def train_model(model, X_train, X_test, y_train, y_test, batch_size, num_epochs,
 		epochs = num_epochs, 
 		batch_size = batch_size, 
 		validation_data=(X_test,y_test),
+		callbacks = cb_list,
 		verbose = 1)
 
 	model.save_weights(save_path)

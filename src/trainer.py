@@ -2,7 +2,6 @@ import functools
 import sys
 
 from tensorflow import keras
-import tensorflowjs as tfjs
 
 from champion_map import internal_champion_map, n_champs, champion_name_map
 
@@ -18,9 +17,12 @@ class Trainer:
 		self.comp_model = training_config.DO_COMP_TRAIN or training_config.DO_COMP_LOAD
 		self.stats_model = training_config.DO_STATS_TRAIN or training_config.DO_STATS_LOAD
 		self.dual_model = training_config.DO_DUAL_TRAIN or training_config.DO_DUAL_LOAD
+		self.best_model = None
 
 		self.stats_examples = None
 		self.comp_examples = None
+		self.predictModels = []
+		self.isPredictModel = False
 
 	def create_models(self):
 		# Create models desired
@@ -34,9 +36,20 @@ class Trainer:
 				self.dual_model = create_dual_model(self.stats_model)
 
 		# Models used for making a prediction on a match using only compositional data
-		self.predictModels = [self.comp_model, self.dual_model]
+		self.predictModels.append(self.comp_model)
+		self.predictModels.append(self.dual_model)
+
 		# Models used for making a prediction 
 		self.isPredictModel = functools.reduce(lambda a,b: a or b, map(lambda x: bool(x), self.predictModels))
+
+	def load_best_model(self):
+		try:
+			self.best_model = keras.models.load_model(training_config.BEST_SAVE_PATH)
+		except:
+			self.best_model = None
+
+		self.predictModels.append(self.best_model)
+		self.isPredictModel = self.isPredictModel or bool(self.best_model)
 
 	def load_data(self):
 		if training_config.DO_LOAD_DATA:
@@ -46,67 +59,95 @@ class Trainer:
 				self.compX_train, self.compX_test, self.compy_train, self.compy_test = get_comp_data(self.comp_examples)
 
 	def train_load_models(self):
+		# Remove models not created already
+		if type(self.comp_model) == bool:
+			self.comp_model = None
+		if type(self.dual_model) == bool:
+			self.dual_model = None
+		if type(self.stats_model) == bool:
+			self.stats_model = None
+
 		# Train or load the models
-		if training_config.DO_COMP_TRAIN:
-			self.comp_loss, self.comp_acc, self.comp_history = train_model(self.comp_model, 
+		if self.comp_model:
+			if training_config.DO_COMP_TRAIN:
+				self.comp_loss, self.comp_acc, self.comp_history = train_model(self.comp_model, 
+					self.compX_train, 
+					self.compX_test, 
+					self.compy_train, 
+					self.compy_test, 
+					training_config.COMP_BATCH_SIZE, 
+					training_config.COMP_NUM_EPOCHS,
+					training_config.COMP_SAVE_PATH,
+					has_acc=True)
+
+				plot_metric_history(self.comp_model, self.comp_history, 'loss', training_config.COMP_NUM_EPOCHS)
+				plot_metric_history(self.comp_model, self.comp_history, 'accuracy', training_config.COMP_NUM_EPOCHS)
+				
+				best_epoch(self.comp_history, has_acc=True)
+
+				print('Comp test accuracy: %.3f' % self.comp_acc)
+			elif training_config.DO_COMP_LOAD:
+				self.comp_model.load_weights(training_config.COMP_SAVE_PATH)
+
+		if self.stats_model:
+			if training_config.DO_STATS_TRAIN:
+				
+				self.statsX_train, self.statsX_test, self.statsy_train, self.statsy_test = get_stats_data(self.stats_examples)
+
+				self.stats_loss, self.stats_acc, self.stats_history = train_model(self.stats_model, 
+					self.statsX_train, 
+					self.statsX_test, 
+					self.statsy_train, 
+					self.statsy_test,
+					training_config.STATS_BATCH_SIZE, 
+					training_config.STATS_NUM_EPOCHS,
+					training_config.STATS_SAVE_PATH)
+
+				plot_metric_history(self.stats_model, self.stats_history, 'loss', training_config.STATS_NUM_EPOCHS)
+
+				best_epoch(self.stats_history)
+
+			elif training_config.DO_STATS_LOAD:
+				self.stats_model.load_weights(training_config.STATS_SAVE_PATH)
+
+		if self.dual_model:
+			if training_config.DO_DUAL_TRAIN:
+
+				self.dual_loss, self.dual_acc, self.dual_history = train_model(self.dual_model, 
+					self.compX_train, 
+					self.compX_test, 
+					self.compy_train, 
+					self.compy_test, 
+					training_config.DUAL_BATCH_SIZE, 
+					training_config.DUAL_NUM_EPOCHS,
+					training_config.DUAL_SAVE_PATH,
+					has_acc=True)
+
+				plot_metric_history(self.dual_model, self.dual_history, 'loss', training_config.DUAL_NUM_EPOCHS)
+				plot_metric_history(self.dual_model, self.dual_history, 'accuracy', training_config.DUAL_NUM_EPOCHS)
+				
+				best_epoch(self.dual_history, has_acc=True)
+
+				print('Dual test accuracy: %.3f' % self.dual_acc)
+			elif training_config.DO_DUAL_LOAD:
+				self.dual_model.load_weights(training_config.DUAL_SAVE_PATH)
+
+		if training_config.DO_LOAD_DATA and self.best_model:
+			es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=50)
+
+			best_loss, best_acc, best_history = train_model(self.best_model, 
 				self.compX_train, 
 				self.compX_test, 
 				self.compy_train, 
 				self.compy_test, 
-				training_config.COMP_BATCH_SIZE, 
-				training_config.COMP_NUM_EPOCHS,
-				training_config.COMP_SAVE_PATH,
-				has_acc=True)
+				training_config.BEST_BATCH_SIZE, 
+				training_config.BEST_NUM_EPOCHS,
+				training_config.BEST_SAVE_PATH,
+				has_acc=True,
+				cb_list=[es])
 
-			plot_metric_history(self.comp_model, self.comp_history, 'loss', training_config.COMP_NUM_EPOCHS)
-			plot_metric_history(self.comp_model, self.comp_history, 'accuracy', training_config.COMP_NUM_EPOCHS)
-			
-			best_epoch(self.comp_history, has_acc=True)
+			print('Best test loss: {}%\nBest test accuracy: {}%'.format(best_loss, best_acc))
 
-			print('Comp test accuracy: %.3f' % self.comp_acc)
-		elif training_config.DO_COMP_LOAD:
-			self.comp_model.load_weights(training_config.COMP_SAVE_PATH)
-
-		if training_config.DO_STATS_TRAIN:
-			
-			self.statsX_train, self.statsX_test, self.statsy_train, self.statsy_test = get_stats_data(self.stats_examples)
-
-			self.stats_loss, self.stats_acc, self.stats_history = train_model(self.stats_model, 
-				self.statsX_train, 
-				self.statsX_test, 
-				self.statsy_train, 
-				self.statsy_test,
-				training_config.STATS_BATCH_SIZE, 
-				training_config.STATS_NUM_EPOCHS,
-				training_config.STATS_SAVE_PATH)
-
-			plot_metric_history(self.stats_model, self.stats_history, 'loss', training_config.STATS_NUM_EPOCHS)
-
-			best_epoch(self.stats_history)
-
-		elif training_config.DO_STATS_LOAD:
-			self.stats_model.load_weights(training_config.STATS_SAVE_PATH)
-
-		if training_config.DO_DUAL_TRAIN:
-
-			self.dual_loss, self.dual_acc, self.dual_history = train_model(self.dual_model, 
-				self.compX_train, 
-				self.compX_test, 
-				self.compy_train, 
-				self.compy_test, 
-				training_config.DUAL_BATCH_SIZE, 
-				training_config.DUAL_NUM_EPOCHS,
-				training_config.DUAL_SAVE_PATH,
-				has_acc=True)
-
-			plot_metric_history(self.dual_model, self.dual_history, 'loss', training_config.DUAL_NUM_EPOCHS)
-			plot_metric_history(self.dual_model, self.dual_history, 'accuracy', training_config.DUAL_NUM_EPOCHS)
-			
-			best_epoch(self.dual_history, has_acc=True)
-
-			print('Dual test accuracy: %.3f' % self.dual_acc)
-		elif training_config.DO_DUAL_LOAD:
-			self.dual_model.load_weights(training_config.DUAL_SAVE_PATH)
 
 	def print_model_info(self):
 		# Print model summaries
@@ -167,7 +208,6 @@ class Trainer:
 						print("New best model found!")
 
 			best_model.save(training_config.BEST_SAVE_PATH)
-			tfjs.converters.save_keras_model(best_model, training_config.BEST_SAVE_PATH + '/tfjs')
 			print("\nBest model loss: ", best_loss)
 
 if __name__ == '__main__':

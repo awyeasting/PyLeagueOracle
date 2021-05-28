@@ -1,3 +1,6 @@
+BEST_BATCH_SIZE = -1
+BEST_NUM_EPOCHS = 2000
+
 COMP_HIDDEN_NODES = [100]
 COMP_LEARNING_RATE = 0.0005
 COMP_NUM_EPOCHS = 1000
@@ -42,6 +45,8 @@ STATS_SAVE_PATH = "./checkpoints/stats_most_recent"
 DUAL_SAVE_PATH = "./checkpoints/dual_most_recent"
 
 BEST_SAVE_PATH = "models/best_model"
+
+BEST_RETRAIN_WAIT = 24 * 60 * 60 # Currently retrains once a day
 
 DO_PREDICT_MANUAL_EXAMPLES = True
 
