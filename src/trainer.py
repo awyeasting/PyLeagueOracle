@@ -70,6 +70,8 @@ class Trainer:
 		# Train or load the models
 		if self.comp_model:
 			if training_config.DO_COMP_TRAIN:
+				es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=training_config.COMP_PATIENCE)
+
 				self.comp_loss, self.comp_acc, self.comp_history = train_model(self.comp_model, 
 					self.compX_train, 
 					self.compX_test, 
@@ -78,11 +80,12 @@ class Trainer:
 					training_config.COMP_BATCH_SIZE, 
 					training_config.COMP_NUM_EPOCHS,
 					training_config.COMP_SAVE_PATH,
-					has_acc=True)
+					has_acc=True,
+                                	cb_list=[es])
 
-				plot_metric_history(self.comp_model, self.comp_history, 'loss', training_config.COMP_NUM_EPOCHS)
-				plot_metric_history(self.comp_model, self.comp_history, 'accuracy', training_config.COMP_NUM_EPOCHS)
-				
+				#plot_metric_history(self.comp_model, self.comp_history, 'loss', training_config.COMP_NUM_EPOCHS)
+				#plot_metric_history(self.comp_model, self.comp_history, 'accuracy', training_config.COMP_NUM_EPOCHS)
+
 				best_epoch(self.comp_history, has_acc=True)
 
 				print('Comp test accuracy: %.3f' % self.comp_acc)
@@ -91,7 +94,8 @@ class Trainer:
 
 		if self.stats_model:
 			if training_config.DO_STATS_TRAIN:
-				
+				es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=training_config.STATS_PATIENCE)
+
 				self.statsX_train, self.statsX_test, self.statsy_train, self.statsy_test = get_stats_data(self.stats_examples)
 
 				self.stats_loss, self.stats_acc, self.stats_history = train_model(self.stats_model, 
@@ -101,9 +105,10 @@ class Trainer:
 					self.statsy_test,
 					training_config.STATS_BATCH_SIZE, 
 					training_config.STATS_NUM_EPOCHS,
-					training_config.STATS_SAVE_PATH)
+					training_config.STATS_SAVE_PATH,
+                                	cb_list=[es])
 
-				plot_metric_history(self.stats_model, self.stats_history, 'loss', training_config.STATS_NUM_EPOCHS)
+				#plot_metric_history(self.stats_model, self.stats_history, 'loss', training_config.STATS_NUM_EPOCHS)
 
 				best_epoch(self.stats_history)
 
@@ -112,6 +117,7 @@ class Trainer:
 
 		if self.dual_model:
 			if training_config.DO_DUAL_TRAIN:
+				es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=training_config.DUAL_PATIENCE)
 
 				self.dual_loss, self.dual_acc, self.dual_history = train_model(self.dual_model, 
 					self.compX_train, 
@@ -121,11 +127,12 @@ class Trainer:
 					training_config.DUAL_BATCH_SIZE, 
 					training_config.DUAL_NUM_EPOCHS,
 					training_config.DUAL_SAVE_PATH,
-					has_acc=True)
+					has_acc=True,
+                                	cb_list=[es])
 
-				plot_metric_history(self.dual_model, self.dual_history, 'loss', training_config.DUAL_NUM_EPOCHS)
-				plot_metric_history(self.dual_model, self.dual_history, 'accuracy', training_config.DUAL_NUM_EPOCHS)
-				
+				#plot_metric_history(self.dual_model, self.dual_history, 'loss', training_config.DUAL_NUM_EPOCHS)
+				#plot_metric_history(self.dual_model, self.dual_history, 'accuracy', training_config.DUAL_NUM_EPOCHS)
+
 				best_epoch(self.dual_history, has_acc=True)
 
 				print('Dual test accuracy: %.3f' % self.dual_acc)
@@ -133,7 +140,7 @@ class Trainer:
 				self.dual_model.load_weights(training_config.DUAL_SAVE_PATH)
 
 		if training_config.DO_LOAD_DATA and self.best_model:
-			es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=50)
+			es = keras.callbacks.EarlyStopping(monitor="val_loss", mode='min', patience=training_config.BEST_PATIENCE)
 
 			best_loss, best_acc, best_history = train_model(self.best_model, 
 				self.compX_train, 
