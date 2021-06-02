@@ -3,7 +3,7 @@ import time
 
 from HIDDEN_CONFIG import API_KEY
 from config import LOL_API_BASE_URL, TIER_MAPPING, RATE_LIMIT
-from util import waitForRequestTime
+from util import waitApiRequest, waitApiClear
 
 # process for getting challenger account ids:
 # /lol/league/v4/challengerleagues/by-queue/{queue} (queue = "RANKED_SOLO_5x5") -> ["entries"][i]["summonerId"]
@@ -16,23 +16,24 @@ GET_SUMMONER_PATH = "/lol/summoner/v4/summoners/"
 GET_SUMMONER_RANK_PATH = "/lol/league/v4/entries/by-summoner/"
 
 # Get the current rank of a particular summoner id
-def get_summoner_rank(summonerId, lrt = 0):
+def get_summoner_rank(summonerId):
+	waitApiRequest("league-v4","by-summoner")
 	print("Getting summoner rank for match labeling...", flush=True)
 	url = LOL_API_BASE_URL + GET_SUMMONER_RANK_PATH + summonerId + "?api_key=" + API_KEY
-	waitForRequestTime(lrt)
-	lrt = time.time()
 	response = requests.get(url)
 
 	# If the summonerId isn't found anymore (moved servers?)
 	if response.status_code == 404:
 		print("Could not get rank from summonerId")
-		return {}, lrt
+		return {}
 
-	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	# Try again if it didn't go through
 	if response.status_code != 200:
 		print(response.text)
-		print("Get summoner rank filed with response code:", response.status_code)
-		time.sleep(10 * RATE_LIMIT)
+		print("Get summoner rank failed with response code:", response.status_code)
+		# Wait for messages to clear if rate limited
+		if response.status_code == 429:
+			waitApiClear("league-v4","by-summoner")
 		return get_summoner_rank(summonerId)
 
 	rank = {}
@@ -46,31 +47,33 @@ def get_summoner_rank(summonerId, lrt = 0):
 			break
 
 	print("Found summoner rank:", rank)
-	return rank, lrt
+	return rank
 
 # Get the account id associated with a particular summoner id
 def get_summoner_account_id(summonerId):
+	waitApiRequest("summoner-v4", "summoners")
 	url = LOL_API_BASE_URL + GET_SUMMONER_PATH + summonerId + "?api_key=" + API_KEY
 	response = requests.get(url)
 
-	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	# Fail if the server can't find the summoner
 	if response.status_code == 404:
 		print("Account id lookup request 404, skipping account")
 		return None
+
+	# Try again if it didn't go through
 	if response.status_code != 200:
-		rateMod = 2
-		# Wait longer if too many requests
-		if response.status_code == 429:
-			rateMod = 10
 		print(response.text)
 		print("Get summoner account id failed with code:", response.status_code, flush=True)
-		time.sleep(rateMod * RATE_LIMIT)
+		# Wait for messages to clear if rate limited
+		if response.status_code == 429:
+			waitApiClear("summoner","summoners")
 		return get_summoner_account_id(summonerId)
 
 	return response.json()["accountId"]
 
 # Get list of summoner ids with associated lp for each summoner
 def get_challenger_summoners():
+	waitApiRequest("league-v4","challengerleagues")
 	print("Getting challenger summoners...", flush=True)
 	url = LOL_API_BASE_URL + GET_CHALLENGER_LEAGUE_PATH + CHALLENGER_QUEUE + "?api_key=" + API_KEY
 	response = requests.get(url)
@@ -78,13 +81,11 @@ def get_challenger_summoners():
 
 	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
 	if response.status_code != 200:
-		rateMod = 2
-		# Wait longer if too many requests
-		if response.status_code == 429:
-			rateMod = 10
 		print(response.text)
 		print("Get challenger summoners request failed with code:", response.status_code, flush=True)
-		time.sleep(rateMod * RATE_LIMIT)
+		# Wait for messages to clear if rate limited
+		if response.status_code == 429:
+			waitApiClear("league-v4","challengerleagues")
 		return get_challenger_summoners()
 
 	summonerIds = []
@@ -96,10 +97,8 @@ def get_challenger_summoners():
 # Get min(n_summoners, max summoners) - offset pairs if possible
 # Otherwise just get min(n_summoners, max summoners) pairs if possible
 # Otherise just get max summoners pairs
-def get_challenger_seeds(n_summoners,highest_first = False, offset = 0, lrt = 0):
+def get_challenger_seeds(n_summoners,highest_first = False, offset = 0):
 	print("Getting challenger seeds...", flush=True)
-	waitForRequestTime(lrt)
-	lrt = time.time()
 	summoners = get_challenger_summoners()
 
 	# Sort it to either be descending or ascending (default)
@@ -117,8 +116,6 @@ def get_challenger_seeds(n_summoners,highest_first = False, offset = 0, lrt = 0)
 	accounts = []
 	for i in range(offset, n_summoners):
 		print("Looking up account id {} of {}...".format(i+1, n_summoners), flush=True)
-		waitForRequestTime(lrt)
-		lrt = time.time()
 		accountId = get_summoner_account_id(summoners[i][1])
 		account = {}
 		account["accountId"] = accountId
@@ -126,4 +123,4 @@ def get_challenger_seeds(n_summoners,highest_first = False, offset = 0, lrt = 0)
 		if accountId != None:
 			accounts.append(account)
 
-	return accounts, lrt
+	return accounts

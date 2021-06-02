@@ -5,34 +5,31 @@ from HIDDEN_CONFIG import API_KEY
 from config import LOL_API_BASE_URL, RATE_LIMIT, MAX_MATCH_AGE_DAYS, MAX_MATCH_TIER
 from summoners import get_challenger_seeds, get_summoner_rank
 from accounts import get_player_match_info
-from util import waitForRequestTime
+from util import waitApiRequest, waitApiClear
 
 # /lol/match/v4/matches/{matchId} -> match
 GET_MATCH_PATH = "/lol/match/v4/matches/"
 
 # Pull the relevant data from a single match for storage
-def get_match_data(matchId, lrt=0):
+def get_match_data(matchId):
 	match_data = {}
 	url = LOL_API_BASE_URL + GET_MATCH_PATH + str(matchId) + "?api_key=" + API_KEY
-	waitForRequestTime(lrt)
-	lrt = time.time()
+	waitApiRequest("match-v4","matches")
 	response = requests.get(url)
 	match = response.json()
 
-	# If the matchId isn't found anymore (too old now?)
+	# If the matchId isn't found anymore (too old now?), skip!
 	if response.status_code == 404:
 		print("Match id not found, skipping seed")
-		return None, lrt
+		return None
 
-	# Try again in 10 * RATE_LIMIT seconds if it didn't go through
+	# Try again if it didn't go through
 	if response.status_code != 200:
-		rateMod = 2
-		# Wait longer if too many requests
-		if response.status_code == 429:
-			rateMod = 10
 		print(response.text)
 		print("Pull match request failed with code:",response.status_code)
-		time.sleep(rateMod * RATE_LIMIT)
+		# Wait for messages to clear if rate limited
+		if response.status_code == 429:
+			waitApiClear("match-v4","matches")
 		return get_match_data(matchId)
 
 	# Get player non specific data
@@ -65,7 +62,7 @@ def get_match_data(matchId, lrt=0):
 
 	# Print match data for debugging purposes (must import from pulldata.py)
 	#print_match(players, outcome)
-	return match_data, lrt
+	return match_data
 
 # Do a breadth first graph traversal of league of legends matches to search for unseen
 # match data to save
@@ -85,15 +82,12 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 	last_n_seeds = 0
 	n_seeds = 1
 	start_time = time.time()
-	last_request_time = 0
-	requests = []
 	while True:
 		# If there are currently no seeds then get the challenger seeds
 		if not len(seeds):
 			# Offset for skipping past potentially recently seen seeds
 			# (function guarantees that it will be able to return seeds if offset gets too high)
-
-			seeds, last_request_time = get_challenger_seeds(n_seeds, offset = last_n_seeds, lrt = last_request_time)
+			seeds = get_challenger_seeds(n_seeds, offset = last_n_seeds)
 
 			# If using persistent seeds then save the seeds
 			if seedCol:
@@ -111,8 +105,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 		seeds_looked_at += 1
 
 		# Pull player match info
-		player_matches, last_request_time = get_player_match_info(seed["accountId"], lrt = last_request_time)
-		requests.append(last_request_time)
+		player_matches = get_player_match_info(seed["accountId"])
 		oldestTimeStamp = 1000*(time.time() - (MAX_MATCH_AGE_DAYS * 24 * 60 * 60))
 
 		# If player account not found, then skip this seed
@@ -137,8 +130,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 				# Pull match data and add to database it if it isn't
 				try:
-					match_data, last_request_time = get_match_data(match["gameId"], lrt = last_request_time)
-					requests.append(last_request_time)
+					match_data = get_match_data(match["gameId"])
 				except KeyError:
 					print("Unknown error occurred while trying to pull match data, skipping...")
 					continue
@@ -149,8 +141,7 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 
 				# Attach seed's rank to match
 				if seed_rank == None:
-					seed_rank, last_request_time = get_summoner_rank(seed["summonerId"], lrt=last_request_time)
-					requests.append(last_request_time)
+					seed_rank = get_summoner_rank(seed["summonerId"])
 					if seed_rank.get("rankMapping") == None:
 						print("Discarding unknown rank seed...")
 						break
@@ -181,9 +172,3 @@ def pull_many_matches(seeds=[], matchCol=None, seedCol=None):
 				print("Inserted match into database ({} matches added from {} seeds)".format(n_matches_added, seeds_looked_at))
 				matches_per_second = n_matches_added / (cur_time - start_time)
 				print("{:.2f} matches per second ({:.2f} matches per minutes)".format(matches_per_second, matches_per_second * 60), flush=True)
-				minuteAgoTime = cur_time - 120
-				while True:
-					if minuteAgoTime < requests[0]:
-						break
-					requests = requests[1:]
-				print("{} requests per minute".format(len(requests)/2))
