@@ -46,7 +46,7 @@ class Trainer:
 		try:
 			self.best_model = keras.models.load_model(training_config.BEST_SAVE_PATH)
 		except:
-			self.best_model = None
+			self.best_model = None 
 
 		self.predictModels.append(self.best_model)
 		self.isPredictModel = self.isPredictModel or bool(self.best_model)
