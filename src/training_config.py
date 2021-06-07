@@ -1,35 +1,63 @@
-BEST_BATCH_SIZE = -1
-BEST_NUM_EPOCHS = 2000
-BEST_PATIENCE = 3
+import comp_model
+import stats_model
+import dual_model
 
-COMP_HIDDEN_NODES = [100]
-COMP_LEARNING_RATE = 0.0005
-COMP_NUM_EPOCHS = 1000
-COMP_BATCH_SIZE = -1
-COMP_TEST_PORTION = 0.2
-COMP_SPLIT_SEED = 1338
-COMP_REG_PARAM = 0.01
-COMP_PATIENCE = 25
-
+# Configurations for data load
 COMP_PORTION = 0.8 # How much of the training data to give to the composition model vs stats model
-PORTION_SEED = 1337
-
-STATS_HIDDEN_NODES = [128]
-STATS_LEARNING_RATE = 0.0005
-STATS_NUM_EPOCHS = 600
-STATS_BATCH_SIZE = -1
+COMP_TEST_PORTION = 0.2
 STATS_TEST_PORTION = 0.2
+COMP_SPLIT_SEED = 1338
 STATS_SPLIT_SEED = 1338
-STATS_PATIENCE = 25
-
-DUAL_HIDDEN_NODES = [100]
-DUAL_LEARNING_RATE = 0.00005
-DUAL_NUM_EPOCHS = 500
-DUAL_BATCH_SIZE = -1
-DUAL_PATIENCE = 25
-
+PORTION_SEED = 1337
 N_MATCHES = -1
 
+# Configurations for model structure and training properties
+MODELS = [
+	{
+		"NAME" : "CompModel",
+		"DO_TRAIN": True,
+		"CLASS": comp_model.CompModel,
+		"CONFIG": {
+			"IS_PREDICT_MODEL": True,
+			"HIDDEN_NODES" : [100],
+			"LEARNING_RATE" : 0.0005,
+			"NUM_EPOCHS" : 1000,
+			"BATCH_SIZE" : -1,
+			"REG_PARAM" : 0.01,
+			"PATIENCE" : 25
+		}
+	},
+	{
+		"NAME" : "StatsModel",
+		"DO_TRAIN": True,
+		"CLASS": stats_model.StatsModel,
+		"CONFIG": {
+			"IS_PREDICT_MODEL": False,
+			"HIDDEN_NODES" : [128],
+			"LEARNING_RATE" : 0.0005,
+			"NUM_EPOCHS" : 600,
+			"BATCH_SIZE" : -1,
+			"PATIENCE" : 25
+		}
+	},
+	{
+		"NAME" : "DualModel",
+		"DO_TRAIN": True,
+		"CLASS": dual_model.DualModel,
+		"CONFIG": {
+			"IS_PREDICT_MODEL": True,
+			"HIDDEN_NODES" : [100],
+			"LEARNING_RATE" : 0.00005,
+			"NUM_EPOCHS" : 1000,
+			"BATCH_SIZE" : -1,
+			"PATIENCE" : 25,
+			"STATS_MODEL_NAME" : "StatsModel"
+		}
+	}
+]
+
+
+# MISC
 DO_MATCH_DUP = False
 
 DO_COMP_TRAIN = True
@@ -41,12 +69,10 @@ DO_DUAL_LOAD = False
 DO_STATS_TRAIN = False
 DO_STATS_LOAD = False or DO_DUAL_LOAD or DO_DUAL_TRAIN
 
-DO_LOAD_DATA = True or DO_COMP_TRAIN or DO_STATS_TRAIN or DO_DUAL_TRAIN
+DO_LOAD_DATA = True
 
 CHECKPOINT_PATH = "training_1/cp.ckpt"
-COMP_SAVE_PATH = "./checkpoints/comp_most_recent"
-STATS_SAVE_PATH = "./checkpoints/stats_most_recent"
-DUAL_SAVE_PATH = "./checkpoints/dual_most_recent"
+BASE_SAVE_PATH = "./checkpoints/{}_most_recent"
 
 BEST_SAVE_PATH = "models/best_model"
 

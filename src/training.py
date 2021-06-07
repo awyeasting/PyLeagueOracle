@@ -115,7 +115,7 @@ def get_stats_data(examples):
 		test_size=training_config.STATS_TEST_PORTION,
 		random_state=training_config.STATS_SPLIT_SEED)
 
-	return X_train, X_test, y_train, y_test
+	return {"X_train": X_train, "X_test": X_test, "y_train": y_train, "y_test": y_test}
 
 def get_comp_data(comp_examples):
 	X = comp_examples[:,:-1]
@@ -130,7 +130,7 @@ def get_comp_data(comp_examples):
 	if training_config.DO_MATCH_DUP:
 		X_train, y_train = boost_comp_training_data(X_train, y_train)
 
-	return X_train, X_test, y_train, y_test
+	return { "X_train": X_train, "X_test": X_test, "y_train": y_train, "y_test": y_test}
 
 # Get n matches (all matches in database if n < 0)
 def get_matches(n = -1):
@@ -210,133 +210,33 @@ def best_epoch(history, has_acc=False):
 		print("Minimum test loss reached in epoch {}".format(me))
 	return me
 
-# Create a sequential model to train on
-def create_simple_comp_training_model():
-	# Combine one hot encodings within each team to form model input
-	inputs = keras.Input(shape=(10,n_champs))
-	champTensors = tf.unstack(inputs, 10, axis=1)
-	t1 = tf.stack(champTensors[:5], axis=1)
-	t2 = tf.stack(champTensors[5:], axis=1)
-	t1CompInput = tf.math.reduce_sum(t1, axis=1)
-	t2CompInput = tf.math.reduce_sum(t2, axis=1)
-	compInput = tf.concat([t1CompInput, t2CompInput], 1)
-
-	# Build fully connected feedforward model
-	hnos = [None] * len(training_config.COMP_HIDDEN_NODES)
-	hnos[0] = keras.layers.Dense(training_config.COMP_HIDDEN_NODES[0], 
-		activation='relu', 
-		kernel_initializer='he_normal', 
-		kernel_regularizer=keras.regularizers.l2(l=training_config.COMP_REG_PARAM))(compInput)
-	for i in range(1,len(hnos)):
-		hnos[i] = keras.layers.Dense(training_config.COMP_HIDDEN_NODES[i], 
-			activation='relu', 
-			kernel_initializer='he_normal',
-			kernel_regularizer=keras.regularizers.l2(l=training_config.COMP_REG_PARAM))(hnos[i-1])
-	outputs = keras.layers.Dense(1, activation='sigmoid')(hnos[-1])
-
-	model = keras.Model(inputs=inputs, outputs=outputs, name="CompModel")
-
-	opt = keras.optimizers.Adam(learning_rate=training_config.COMP_LEARNING_RATE)
-	model.compile(optimizer=opt, loss='binary_crossentropy',metrics=['accuracy'])
-
-	return model
-
-def create_stats_model():
-	model = keras.Sequential(name="StatsModel")
-	model.add(keras.layers.Dense(training_config.STATS_HIDDEN_NODES[0], activation='relu', kernel_initializer='he_normal', input_shape=(n_champs,)))
-	for hn in training_config.STATS_HIDDEN_NODES[1:]:
-		model.add(keras.layers.Dense(hn, activation='relu', kernel_initializer='he_normal'))
-	model.add(keras.layers.Dense(len(training_config.STATS_KEYS)))
-
-	opt = keras.optimizers.Adam(learning_rate=training_config.STATS_LEARNING_RATE)
-	model.compile(optimizer=opt, loss='mae')
-
-	return model
-
-def create_dual_model(stats_model):
-	inputs = keras.Input(shape=(10,n_champs))
-
-	# Stat prediction
-	champTensors = tf.unstack(inputs, 10, axis=1)
-	champStatsTensors = [stats_model(champTensor) for champTensor in champTensors]
-	t1ChampStatsTensors = champStatsTensors[:5]
-	t2ChampStatsTensors = champStatsTensors[5:]
-
-	t1ChampStatsAvg = tf.math.reduce_mean(t1ChampStatsTensors, axis=0)
-	t1ChampStatsMax = tf.math.reduce_max(t1ChampStatsTensors, axis=0)
-	t1ChampStatsMin = tf.math.reduce_min(t1ChampStatsTensors, axis=0)
-
-	t2ChampStatsAvg = tf.math.reduce_mean(t2ChampStatsTensors, axis=0)
-	t2ChampStatsMax = tf.math.reduce_max(t2ChampStatsTensors, axis=0)
-	t2ChampStatsMin = tf.math.reduce_min(t2ChampStatsTensors, axis=0)
-
-	t1ChampStats = tf.concat([t1ChampStatsAvg,t1ChampStatsMin,t1ChampStatsMax], 1)
-	t2ChampStats = tf.concat([t2ChampStatsAvg,t2ChampStatsMin,t2ChampStatsMax], 1)
-
-	#print("Input shape:",inputs.shape, flush=True)
-	#print("Champ Tensors len:", len(champTensors))
-	#print("Champ Tensors shape:",champTensors[0].shape, flush=True)
-	#print("Champ stats tensors shape:",champStatsTensors[0].shape, flush=True)
-	#print("T1 champ stats len:", len(champStatsTensors))
-	#print("T1 champ stats shape:",t1ChampStatsTensors[0].shape, flush=True)
-	#print("T1 avg stats shape:",t1ChampStatsAvg.shape, flush=True)
-	#print("T1 max stats shape:",t1ChampStatsMax.shape, flush=True)
-	#print("T1 min stats shape:",t1ChampStatsMin.shape, flush=True)
-	#print("T1 stats shape:",t1ChampStats.shape, flush=True)
-
-	t1 = tf.stack(champTensors[:5], axis=1)
-	t2 = tf.stack(champTensors[5:], axis=1)
-	#print("t1 shape:", t1.shape)
-
-	# Normal composition based prediction
-	t1CompInput = tf.math.reduce_sum(t1, axis=1)
-	t2CompInput = tf.math.reduce_sum(t2, axis=1)
-	#print("T1 comp input shape:",t1CompInput.shape, flush=True)
-	compInput = tf.concat([t1CompInput, t2CompInput], 1)
-	#print("Comp input shape:", compInput.shape, flush=True)
-	inputPlusTensor = tf.concat([compInput,t1ChampStats,t2ChampStats], 1)
-	#print("Input plus shape:",inputPlusTensor.shape, flush=True)
-	hnos = [None] * len(training_config.DUAL_HIDDEN_NODES)
-	hnos[0] = keras.layers.Dense(training_config.DUAL_HIDDEN_NODES[0], activation='relu', kernel_initializer='he_normal')(inputPlusTensor)
-	#print("Hidden nodes 0 shape:", hnos[0].shape)
-	for i in range(1,len(hnos)):
-		hnos[i] = keras.layers.Dense(training_config.DUAL_HIDDEN_NODES[i], activation='relu', kernel_initializer='he_normal')(hnos[i-1])
-		#print("Hidden nodes {} shape:".format(i), hnos[i].shape)
-	outputs = keras.layers.Dense(1, activation='sigmoid')(hnos[-1])
-	#print("Outputs shape:", outputs.shape, flush=True)
-	#print("")
-	model = keras.Model(inputs=inputs, outputs=outputs, name="DualModel")
-
-	opt = keras.optimizers.Adam(learning_rate=training_config.DUAL_LEARNING_RATE)
-	model.compile(optimizer=opt, loss='binary_crossentropy',metrics=['accuracy'])
-
-	return model
-
 # Train the model on training data using test data as validation
-def train_model(model, X_train, X_test, y_train, y_test, batch_size, num_epochs, save_path, has_acc = False, cb_list=[]):
-	if batch_size < 0:
-		batch_size = len(y_train)
+def train_model(model, data, config, has_acc = False, cb_list=[]):
+	if config["BATCH_SIZE"] < 0:
+		config["BATCH_SIZE"] = len(data["y_train"])
 
 	history = model.fit(
-		X_train, 
-		y_train, 
-		epochs = num_epochs, 
-		batch_size = batch_size, 
-		validation_data=(X_test,y_test),
+		data["X_train"], 
+		data["y_train"], 
+		epochs = config["NUM_EPOCHS"], 
+		batch_size = config["BATCH_SIZE"], 
+		validation_data=(data["X_test"],data["y_test"]),
 		callbacks = cb_list,
 		verbose = 1)
 
-	model.save_weights(save_path)
+	model.save_weights(training_config.BASE_SAVE_PATH.format(model.name))
 
 	if has_acc:
-		loss, acc = model.evaluate(X_test, y_test, verbose = 1)
+		loss, acc = model.evaluate(data["X_test"], data["y_test"], verbose = 1)
 		return loss, acc, history
 	else:
-		loss = model.evaluate(X_test, y_test, verbose = 1)
+		loss = model.evaluate(data["X_test"], data["y_test"], verbose = 1)
 		return loss, None, history
 
 # Returns the model's accuracy with most confident predictions using multiple confidence levels
-def get_confidence_accuracies(model, X, y, confidenceLevels=[]):
+def get_confidence_accuracies(model, data, confidenceLevels=[]):
+	X = data["X_test"]
+	y = data["y_test"]
 	if not len(confidenceLevels):
 		print("Error: Please provide a confidence level to get the accuracy of")
 		return None
@@ -379,7 +279,9 @@ def get_confidence_accuracies(model, X, y, confidenceLevels=[]):
 	return accuracies, max_confidences
 
 # Returns the model's accuracy with least confident predictions using multiple confidence levels
-def get_unconfidence_accuracies(model, X, y, confidenceLevels=[]):
+def get_unconfidence_accuracies(model, data, confidenceLevels=[]):
+	X = data["X_test"]
+	y = data["y_test"]
 	if not len(confidenceLevels):
 		print("Error: Please provide a confidence level to get the accuracy of")
 		return None
