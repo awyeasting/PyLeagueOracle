@@ -45,6 +45,8 @@ def get_match_data(matchId):
 		p = match["participants"][player["id"] - 1]
 		player["team"] = int(200 == p["teamId"])
 		player["champion"] = p["championId"]
+		player["spell1"] = p["spell1Id"]
+		player["spell2"] = p["spell2Id"]
 		player["role"] = p["timeline"]["role"]
 		player["lane"] = p["timeline"]["lane"]
 		player["stats"] = p["stats"]

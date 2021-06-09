@@ -30,8 +30,9 @@ MATCH_CULL_WAIT = 24 * 60 * 60 # Currently culls matches once a day
 # --------------------------------------
 
 LOL_DB_NAME = "leagueoflegends"
-MATCH_COL_NAME = "matches-v2"
+MATCH_COL_NAME = "matches-v3"
 SEED_COL_NAME = "match-seeds"
+ROLE_COL_NAME = "role-games"
 
 # --------------------------------------
 #              API CONFIG
